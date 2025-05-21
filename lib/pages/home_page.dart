@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'task_model.dart';
 
 class HomePage extends StatefulWidget {
@@ -12,108 +14,68 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   List<TaskModel> tasks = [];
 
-  void toggleTaskCompletion(int index) {
-    setState(() {
-      tasks[index].isCompleted = !tasks[index].isCompleted;
-    });
+  @override
+  void initState() {
+    super.initState();
+    loadTasks();
   }
 
-  void markTaskCompleted(int index) {
-    setState(() {
-      tasks[index].isCompleted = !tasks[index].isCompleted;
-      tasks.sort((a, b) {
-        if (a.isCompleted && !b.isCompleted) return 1;
-        if (!a.isCompleted && b.isCompleted) return -1;
-        return 0;
-      });
-    });
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
   }
 
-  void addTask(TaskModel task) {
-    setState(() {
-      task.isCompleted = false;
-      tasks.add(task);
-    });
+  Future<File> get _localFile async {
+    final path = await _localPath;
+    return File('$path/tasks.json');
   }
 
-  void updateTask(int index, TaskModel updatedTask) {
-    setState(() {
-      updatedTask.isCompleted = tasks[index].isCompleted;
-      tasks[index] = updatedTask;
-    });
+  Future<void> saveTasks() async {
+    final file = await _localFile;
+    final json = TaskModel.encode(tasks);
+    await file.writeAsString(json);
+  }
+
+  Future<void> loadTasks() async {
+    try {
+      final file = await _localFile;
+      if (await file.exists()) {
+        final contents = await file.readAsString();
+        setState(() {
+          tasks = TaskModel.decode(contents);
+        });
+      }
+    } catch (e) {
+      // Ignora erros de leitura
+    }
   }
 
   void _handleTaskFormResult(dynamic result, {int? editIndex}) {
-    if (result != null && result is Map<String, dynamic>) {
-      final String text = result['text'] as String;
-      final DateTime? date = result['date'] as DateTime?;
-      final TimeOfDay? time = result['time'] as TimeOfDay?;
-      final String? originalText = result['originalText'] as String?;
-
-      DateTime? combinedDateTime;
-      if (date != null) {
-        if (time != null) {
-          combinedDateTime = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            time.hour,
-            time.minute,
-          );
-        } else {
-          combinedDateTime = date;
-        }
-      }
-
-      if (editIndex != null) {
-        if (text.isEmpty && originalText != null) {
-          setState(() {
-            tasks.removeAt(editIndex);
-          });
-        } else if (text.isNotEmpty) {
-          setState(() {
-            bool currentCompletionStatus = tasks[editIndex].isCompleted;
-            tasks[editIndex] = TaskModel(
-              description: text,
-              dateTime: combinedDateTime,
-              isCompleted: currentCompletionStatus, // Mantém o status
-            );
-          });
-        }
-      } else if (text.isNotEmpty) {
-        // Adicionando nova tarefa
-        setState(() {
-          tasks.add(
-            TaskModel(
-              description: text,
-              dateTime: combinedDateTime,
-              isCompleted: false, // Novas tarefas não estão completas
-            ),
-          );
-        });
-      }
-    } else if (result != null && result is TaskModel) {
-      // Se o seu formulário já retorna um TaskModel completo
-      if (editIndex != null) {
-        setState(() {
-          // Se o result.isCompleted não for gerenciado pela tela de form,
-          // preserve o estado atual.
-          bool currentCompletionStatus = tasks[editIndex].isCompleted;
-          result.isCompleted = currentCompletionStatus;
+    if (result != null && result is TaskModel) {
+      setState(() {
+        if (editIndex != null) {
+          result.isCompleted = tasks[editIndex].isCompleted;
           tasks[editIndex] = result;
-        });
-      } else {
-        setState(() {
-          result.isCompleted = false; // Novas tarefas
+        } else {
+          result.isCompleted = false;
           tasks.add(result);
-        });
-      }
+        }
+        saveTasks();
+      });
     }
+  }
+
+  void toggleTaskCompletion(int index) {
+    setState(() {
+      tasks[index].isCompleted = !tasks[index].isCompleted;
+      saveTasks();
+    });
   }
 
   void deleteTask(int index) {
     setState(() {
       tasks.removeAt(index);
+      saveTasks();
     });
   }
 
@@ -122,23 +84,21 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
+        backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
             icon: const Icon(Icons.label),
-            tooltip: 'Gerenciar Tags',
             onPressed: () {
               Navigator.pushNamed(context, '/tags');
             },
           ),
         ],
-        backgroundColor: Colors.deepPurple,
       ),
       body:
           tasks.isEmpty
               ? const Center(
                 child: Text(
                   'Nenhuma tarefa criada',
-                  textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 18, color: Colors.grey),
                 ),
               )
@@ -152,8 +112,8 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         Checkbox(
                           value: task.isCompleted,
-                          onChanged: (bool? value) {
-                            if (value != null) toggleTaskCompletion(index);
+                          onChanged: (value) {
+                            toggleTaskCompletion(index);
                           },
                           activeColor: Colors.deepPurple,
                         ),
@@ -162,12 +122,11 @@ class _HomePageState extends State<HomePage> {
                             padding: const EdgeInsets.only(left: 8),
                             child: Text(
                               task.tag!,
-                              style: TextStyle(color: Colors.deepPurple),
+                              style: const TextStyle(color: Colors.deepPurple),
                             ),
                           ),
                       ],
                     ),
-
                     title: Text(
                       task.description,
                       style: TextStyle(
@@ -181,17 +140,15 @@ class _HomePageState extends State<HomePage> {
                     subtitle:
                         task.dateTime != null
                             ? Text(
-                              '${task.dateTime!.day}/${task.dateTime!.month}/${task.dateTime!.year} ${task.dateTime!.hour}:${task.dateTime!.minute.toString().padLeft(2, '0')}',
+                              '${task.dateTime!.day}/${task.dateTime!.month}/${task.dateTime!.year} '
+                              '${task.dateTime!.hour}:${task.dateTime!.minute.toString().padLeft(2, '0')}',
                               style: TextStyle(
                                 decoration:
                                     task.isCompleted
-                                        ? TextDecoration
-                                            .lineThrough // Mesmo efeito de riscar
+                                        ? TextDecoration.lineThrough
                                         : TextDecoration.none,
                                 color:
-                                    task.isCompleted
-                                        ? Colors.grey[500] // Cor mais clara
-                                        : null,
+                                    task.isCompleted ? Colors.grey[500] : null,
                               ),
                             )
                             : null,
@@ -206,19 +163,8 @@ class _HomePageState extends State<HomePage> {
                                   : () async {
                                     final result = await Navigator.pushNamed(
                                       context,
-                                      '/form', // Sua rota para a tela de adicionar/editar tarefa
-                                      arguments: {
-                                        // Passando os dados da tarefa para a tela de formulário
-                                        'task': task,
-                                        'date': task.dateTime,
-                                        // Se sua tela de form puder lidar com TimeOfDay separadamente
-                                        'time':
-                                            task.dateTime != null
-                                                ? TimeOfDay.fromDateTime(
-                                                  task.dateTime!,
-                                                )
-                                                : null,
-                                      },
+                                      '/form',
+                                      arguments: {'task': task},
                                     );
                                     _handleTaskFormResult(
                                       result,
@@ -226,7 +172,6 @@ class _HomePageState extends State<HomePage> {
                                     );
                                   },
                         ),
-
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => deleteTask(index),
@@ -241,9 +186,7 @@ class _HomePageState extends State<HomePage> {
         child: ElevatedButton(
           onPressed: () async {
             final result = await Navigator.pushNamed(context, '/form');
-            if (result != null) {
-              addTask(result as TaskModel);
-            }
+            _handleTaskFormResult(result);
           },
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 16),
