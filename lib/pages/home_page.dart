@@ -147,15 +147,27 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, index) {
                   final task = tasks[index];
                   return ListTile(
-                    leading: Checkbox(
-                      value: task.isCompleted,
-                      onChanged: (bool? value) {
-                        if (value != null) {
-                          toggleTaskCompletion(index);
-                        }
-                      },
-                      activeColor: Colors.deepPurple,
+                    leading: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: task.isCompleted,
+                          onChanged: (bool? value) {
+                            if (value != null) toggleTaskCompletion(index);
+                          },
+                          activeColor: Colors.deepPurple,
+                        ),
+                        if (task.tag != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text(
+                              task.tag!,
+                              style: TextStyle(color: Colors.deepPurple),
+                            ),
+                          ),
+                      ],
                     ),
+
                     title: Text(
                       task.description,
                       style: TextStyle(

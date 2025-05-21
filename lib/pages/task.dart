@@ -13,7 +13,7 @@ class _TaskState extends State<Task> {
   DateTime? selectedDateTime;
   String? selectedTag;
 
-  final List<String> availableTags = ['Trabalho', 'Faculdade', 'Saúde'];
+  final List<String> availableTags = ['Trabalho', 'Faculdade', 'Casa'];
 
   bool isEditing = false;
 
